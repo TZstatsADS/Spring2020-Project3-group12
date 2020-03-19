@@ -1,0 +1,23 @@
+---
+title: "R - Python"
+author: Yuqiao Liu
+output: html_notebook
+---
+
+
+
+```{r Python create environment, eval=TRUE, include=FALSE}
+# install.packages("reticulate")
+library(reticulate)
+py_install("pandas")
+py_install("scipy")
+py_install("scikit-learn")
+
+```
+
+
+```{python}
+import pandas as pd
+
+```
+
