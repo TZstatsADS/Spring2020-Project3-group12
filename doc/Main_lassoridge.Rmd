@@ -1,0 +1,266 @@
+---
+title: "Main"
+author: "Ivan Wolansky"
+output:
+  html_document:
+    df_print: paged
+---
+In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
+
+This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
+
+```{r message=FALSE}
+if(!require("EBImage")){
+  install.packages("BiocManager") 
+  BiocManager::install("EBImage")
+}
+if(!require("R.matlab")){
+  install.packages("R.matlab")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("dplyr")){
+  install.packages("dplyr")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("ggplot2")){
+  install.packages("ggplot2")
+}
+
+if(!require("caret")){
+  install.packages("caret")
+}
+
+if(!require("glmnet")){
+  install.packages("glmnet")
+}
+```
+
+### Step 0 set work directories
+```{r wkdir, eval=FALSE}
+set.seed(0)
+#setwd("../Project 3/doc")
+# here replace it with your own path or manually set it in RStudio to where this rmd file is located. 
+# use relative path for reproducibility
+```
+
+Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
+```{r}
+train_dir <- "../data/train_set/" # This will be modified for different data sets.
+train_image_dir <- paste(train_dir, "images/", sep="")
+train_pt_dir <- paste(train_dir,  "points/", sep="")
+train_label_path <- paste(train_dir, "label.csv", sep="") 
+```
+
+
+### Step 1: set up controls for evaluation experiments.
+
+In this chunk, we have a set of controls for the evaluation experiments. 
+
++ (T/F) cross-validation on the training set
++ (number) K, the number of CV folds
++ (0 or 1) alpha, lasso or ridge regression
++ (T/F) process features for training set
++ (T/F) run evaluation on an independent test set
++ (T/F) process features for test set
++ (T/F) labels present in dataset
++ (T/F) test on new data
+
+```{r exp_setup}
+run.cv <- TRUE # run cross-validation on the training set
+
+K <- 5  # number of CV folds
+
+alpha <- 1 # alpha 1 is lasso, 0 is ridge
+
+run.feature.train <- TRUE # process features for training set
+
+run.test <- TRUE # run evaluation on an independent test set
+
+run.feature.test <- TRUE # process features for test set
+
+data.labels <- TRUE # provides accuracy when dataset has labels
+
+run.new.test <- FALSE # run model on a new, never seen before, dataset
+```
+Using cross-validationwe compare the performance of LASSO/Ridge models with different specifications. Here, we tune parameter lambda, the loss coefficient, in multinomial LASSO and Ridge regressions.
+
+### Step 2: import data and train-test split 
+```{r}
+#train-test split
+info <- read.csv(train_label_path)
+
+if (run.new.test) {
+  test_idx <- info$Index
+} else {
+  
+  # split 80% training, 20% testing
+  train_test_split <- sample(info$Index, floor(nrow(info) * 0.8), replace = FALSE)
+  train_idx <- info$Index[train_test_split]
+  test_idx <- info$Index[-train_test_split]
+}
+```
+
+If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
+```{r}
+n_files <- length(list.files(train_image_dir))
+
+image_list <- list()
+for(i in 1:100){
+   image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
+}
+```
+
+Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
+```{r read fiducial points}
+#function to read fiducial points
+#input: index
+#output: matrix of fiducial points corresponding to the index
+readMat.matrix <- function(index){
+     return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+}
+
+#load fiducial points
+fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+```
+
+### Step 3: construct features and responses
+
++ The follow plots show how pairwise distance between fiducial points can work as feature for facial emotion recognition.
+
+  + In the first column, 78 fiducials points of each emotion are marked in order. 
+  + In the second column distributions of vertical distance between right pupil(1) and  right brow peak(21) are shown in  histograms. For example, the distance of an angry face tends to be shorter than that of a surprised face.
+  + The third column is the distributions of vertical distances between right mouth corner(50)
+and the midpoint of the upper lip(52).  For example, the distance of an happy face tends to be shorter than that of a sad face.
+
+![Figure1](../figs/feature_visualization.jpg)
+
+`feature.R` should be the wrapper for all your feature engineering functions and options. The function `feature( )` should have options that correspond to different scenarios for your project and produces an R object that contains features and responses that are required by all the models you are going to evaluate later. 
+  
+  + `feature.R`
+  + Input: list of images or fiducial point
+  + Output: an RData file that contains extracted features and corresponding responses
+
+```{r feature}
+source("../lib/feature.R")
+tm_feature_train <- NA
+if(run.feature.train){
+  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+}
+
+tm_feature_test <- NA
+if(run.feature.test){
+  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+}
+
+save(dat_train, file="../output/feature_train.RData")
+save(dat_test, file="../output/feature_test.RData")
+```
+
+### Step 4: Train a classification model with training features and responses
+Call the train model and test model from library. 
+
+`train.R` and `test.R` should be wrappers for all your model training steps and your classification/prediction steps. 
+
++ `train_ridge_lasso.R`
+  + Input: a data frame containing features and labels and a parameter list.
+  + Output:a trained model
++ `test_ridge_lasso.R`
+  + Input: the fitted classification model using training data and processed features from testing images 
+  + Input: an R object that contains a trained classifier.
+  + Output: training model specification
+
+```{r loadlib}
+source("../lib/train_ridge_lasso.R")
+source("../lib/test_ridge_lasso.R")
+```
+
+```{r}
+# load(file="../output/train_euc.RData")
+# sample <- sample.int(nrow(train_set_euc), size = floor(0.8 * nrow(train_set_euc)), replace = F)
+# dat_train <- train_set_euc[sample, ]
+# dat_test <- train_set_euc[-sample, ]
+```
+
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of training model parameters.
+```{r runcv}
+if(run.cv){
+  tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=dat_train, alpha=alpha, K=K))
+  
+  alpha <- 0
+  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=dat_train, alpha=alpha, K=K))
+  
+  save(cv_lasso_models, file="../output/cv_lasso_models.RData")
+  save(cv_ridge_models, file="../output/cv_ridge_models.RData")
+}
+load(file="../output/cv_lasso_models.RData")
+load(file="../output/cv_ridge_models.RData")
+```
+
+Visualize cross-validation results. 
+```{r cv_vis}
+if(run.cv){
+  plot(cv_lasso_models)
+  plot(cv_ridge_models)
+}
+```
+
+### Step 5: Run test on test images
+```{r test}
+tm_test_lasso <- NA
+tm_test_ridge <- NA
+if(run.test){
+  tm_test_lasso <- system.time(lasso_pred <- regression.test(cv_lasso_models, dat_test))
+  tm_test_ridge <- system.time(ridge_pred <- regression.test(cv_ridge_models, dat_test))
+}
+```
+
+* MODELS EVALUATION
+```{r}
+if(data.labels) {
+  lasso_accu <- mean(dat_test$emotion_idx == lasso_pred)
+  ridge_accu <- mean(dat_test$emotion_idx == ridge_pred)
+  cat("The accuracy of the LASSO model is", lasso_accu*100, "%.\n")
+  cat("The accuracy of the Ridge model is", ridge_accu*100, "%.\n")
+
+  lasso_confusion <- confusionMatrix(as.factor(lasso_pred), as.factor(dat_test$emotion_idx))
+  ridge_confusion <- confusionMatrix(as.factor(ridge_pred), as.factor(dat_test$emotion_idx))
+  print(lasso_confusion)
+  print(ridge_confusion)
+}
+```
+
+Writing to .csv file containing image index and predicted emotion
+```{r}
+if (run.new.test) {
+  lasso_accu <- cv_lasso_models$delta[1]
+  ridge_accu <- cv_ridge_models$delta[1]
+  cat("The predicted accuracy of the LASSO model is", lasso_accu*100, "%.\n")
+  cat("The predicted accuracy of the Ridge model is", ridge_accu*100, "%.\n")
+  write.csv(lasso_labels, 'lasso_labels.csv')
+  lasso_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = lasso_pred)
+  ridge_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = ridge_pred)
+  write.csv(ridge_labels, 'ridge_labels.csv')
+} 
+```
+
+### Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+cat("Time for constructing training features =", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features =", tm_feature_test[1], "s \n")
+cat("Time for training the LASSO model =", tm_train_lasso[1], "s \n")
+cat("Time for training the Ridge model =", tm_train_ridge[1], "s \n")
+cat("Time for testing the LASSO model =", tm_test_lasso[1], "s \n")
+cat("Time for testing the Ridge model =", tm_test_ridge[1], "s \n")
+```
+
+###Reference
+- Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
