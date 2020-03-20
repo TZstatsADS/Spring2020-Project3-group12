@@ -1,0 +1,63 @@
+---
+title: "R - Python"
+author: Yuqiao Liu
+output: html_notebook
+---
+
+
+
+```{r Python create environment, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Run this chunk at the first time
+
+install.packages("reticulate")
+py_install("pandas")
+py_install("scipy")
+py_install("scikit-learn")
+
+```
+
+```{r}
+library(reticulate)
+```
+
+```{python Packages}
+import os
+import time
+import numpy as np
+import pandas as pd
+from scipy.io import loadmat
+from scipy.spatial.distance import cdist
+
+```
+
+```{python  feature Extraction}
+def dist(file):
+    name = list(file.keys())[-1]
+    dat = file[name]
+    dist_mat = cdist(dat, dat, 'euclidean')
+    return dist_mat[np.triu_indices(78, 1)].flatten()
+
+# Read Train datasets
+s = time.time()
+train_label = pd.read_csv('../data/train_set/label.csv')
+file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+
+X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+y_train = train_label['emotion_idx']
+print(f'Training features extraction time: {time.time()-s:.4f} seconds')
+groups = y_train
+
+# # Read Test datasets
+# s = time.time()
+
+# file_path = [os.path.join('../data/test_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+# X_test = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+# print(f'Test features extraction time: {time.time()-s:.4f} seconds')
+```
+```{r}
+X_train <- py$X_train
+y_train <- py$y_train
+# X_test <- py$X_test
+```
+
+

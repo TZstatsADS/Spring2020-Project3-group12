@@ -1,0 +1,118 @@
+---
+title: "R - Python"
+author: Yuqiao Liu
+output: html_notebook
+---
+
+
+
+```{r Python create environment, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Run this chunk at the first time
+
+install.packages("reticulate")
+py_install("pandas")
+py_install("scipy")
+py_install("scikit-learn")
+
+```
+
+```{r, message=FALSE}
+library(reticulate)
+```
+## Packages for python
+```{python Packages}
+import os
+import time
+import numpy as np
+import pandas as pd
+from scipy.io import loadmat
+from scipy.spatial.distance import cdist
+from sklearn.ensemble import VotingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from sklearn.decomposition import PCA
+from sklearn.linear_model import RidgeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.exceptions import ConvergenceWarning
+from  warnings import simplefilter
+
+simplefilter("ignore", category=ConvergenceWarning)
+
+```
+
+## Features Extraction
+```{python  feature Extraction}
+def dist(file):
+    name = list(file.keys())[-1]
+    dat = file[name]
+    dist_mat = cdist(dat, dat, 'euclidean')
+    return dist_mat[np.triu_indices(78, 1)].flatten()
+
+# Read Train datasets
+s = time.time()
+train_label = pd.read_csv('../data/train_set/label.csv')
+file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+
+X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+y_train = train_label['emotion_idx']
+print(f'Training features extraction time: {time.time()-s:.4f} seconds')
+groups = y_train
+
+# # Read Test datasets
+# s = time.time()
+
+# file_path = [os.path.join('../data/test_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+# X_test = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+# print(f'Test features extraction time: {time.time()-s:.4f} seconds')
+```
+## Set the model parameters
+```{python Set the model parameters}
+svm = SVC(kernel='linear', C=.0001, decision_function_shape='ovo')
+ridge = RidgeClassifier(alpha=85)
+logistic = LogisticRegression()
+pca = PCA(n_components=128)
+
+estimators = [('svm', svm), ('ridge', ridge), ('logi', logistic)]
+voting = VotingClassifier(estimators=estimators, voting='hard')
+
+```
+
+## Cross-Validation
+```{python Cross-Validation, include=FALSE}
+train_scores = []
+test_scores = []
+times = []
+X = X_train
+y = y_train
+for i in range(10):
+    s = time.time()
+    X_train, X_validation, y_train, y_validation = train_test_split(X, y, test_size=.2, shuffle=True, stratify=y)
+    X_train_pca = pca.fit_transform(X_train)
+    X_validation_pca = pca.transform(X_validation)
+
+    voting.fit(X_train_pca, y_train)
+
+    test_pred = voting.predict(X_validation_pca)
+    times.append(time.time() - s)
+
+    train_pred = voting.predict(X_train_pca)
+
+    train_score = accuracy_score(y_train, train_pred)
+    test_score = accuracy_score(y_validation, test_pred)
+
+    train_scores.append(train_score)
+    test_scores.append(test_score)
+
+```
+
+## Predicted Train and Test Score by CVs
+```{python Predicted Train and Test Score by CVs}
+print(f'The mean Train Score of Voting is {np.array(train_scores).mean():.4f}')
+print(f'The mean Test Score of Voting is {np.array(test_scores).mean():.4f}')
+print(f'The mean Time per CVs of Voting is {np.array(times).mean():.4f} seconds')
+```
+
+
+
+
