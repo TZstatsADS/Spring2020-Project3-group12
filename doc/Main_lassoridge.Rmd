@@ -161,6 +161,8 @@ if(run.feature.test){
 
 save(dat_train, file="../output/feature_train.RData")
 save(dat_test, file="../output/feature_test.RData")
+load(file="../output/feature_train.RData")
+load(file="../output/feature_test.RData")
 ```
 
 ### Step 4: Train a classification model with training features and responses
@@ -235,14 +237,14 @@ if(data.labels) {
   print(lasso_confusion)
   print(ridge_confusion)
 }
-
 ```
 
 Writing to .csv file containing image index and predicted emotion
 ```{r}
 if (run.new.test) {
-  lasso_accu <- mean(cv_lasso_models$cvm)
-  ridge_accu <- mean(cv_ridge_models$cvm)
+  # mean cross-validation errors for the models
+  lasso_accu <- cv_lasso_models$cvm[match(cv_lasso_models$lambda.min, cv_lasso_models$lambda)]
+  ridge_accu <- cv_ridge_models$cvm[match(cv_ridge_models$lambda.min, cv_ridge_models$lambda)]
   cat("The predicted accuracy of the LASSO model is", lasso_accu*100, "%.\n")
   cat("The predicted accuracy of the Ridge model is", ridge_accu*100, "%.\n")
   lasso_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = lasso_pred)
