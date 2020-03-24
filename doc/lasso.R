@@ -4,6 +4,8 @@ output: html_notebook
 ---
 
 
+newx <- model.matrix(~.-emotion_idx,data=dat_test)
+
 # lasso
 
 library(glmnet)
