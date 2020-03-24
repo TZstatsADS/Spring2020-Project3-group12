@@ -86,7 +86,7 @@ run.feature.test <- TRUE # process features for test set
 
 data.labels <- TRUE # provides accuracy when dataset has labels
 
-run.new.test <- FALSE # run model on a new, never seen before, dataset
+run.new.test <- TRUE # run model on a new, never seen before, dataset
 ```
 Using cross-validationwe compare the performance of LASSO/Ridge models with different specifications. Here, we tune parameter lambda, the loss coefficient, in multinomial LASSO and Ridge regressions.
 
@@ -161,6 +161,8 @@ if(run.feature.test){
 
 save(dat_train, file="../output/feature_train.RData")
 save(dat_test, file="../output/feature_test.RData")
+load(file="../output/feature_train.RData")
+load(file="../output/feature_test.RData")
 ```
 
 ### Step 4: Train a classification model with training features and responses
@@ -240,13 +242,14 @@ if(data.labels) {
 Writing to .csv file containing image index and predicted emotion
 ```{r}
 if (run.new.test) {
-  lasso_accu <- cv_lasso_models$delta[1]
-  ridge_accu <- cv_ridge_models$delta[1]
+  # mean cross-validation errors for the models
+  lasso_accu <- cv_lasso_models$cvm[match(cv_lasso_models$lambda.min, cv_lasso_models$lambda)]
+  ridge_accu <- cv_ridge_models$cvm[match(cv_ridge_models$lambda.min, cv_ridge_models$lambda)]
   cat("The predicted accuracy of the LASSO model is", lasso_accu*100, "%.\n")
   cat("The predicted accuracy of the Ridge model is", ridge_accu*100, "%.\n")
-  write.csv(lasso_labels, 'lasso_labels.csv')
   lasso_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = lasso_pred)
   ridge_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = ridge_pred)
+  write.csv(lasso_labels, 'lasso_labels.csv')
   write.csv(ridge_labels, 'ridge_labels.csv')
 } 
 ```
