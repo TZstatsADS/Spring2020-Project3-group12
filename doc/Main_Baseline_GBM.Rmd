@@ -1,0 +1,230 @@
+---
+title: "Main"
+author: ""
+output:
+---
+
+This file is for running evaluation experiments. 
+
+```{r message=FALSE}
+if(!require("EBImage")){
+  source("https://bioconductor.org/biocLite.R")
+  biocLite("EBImage")
+}
+
+if(!require('BiocManager')){
+  install.packages('BiocManager')
+  BiocManager::install("EBImage")
+}
+
+if(!require("R.matlab")){
+  install.packages("R.matlab")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("dplyr")){
+  install.packages("dplyr")
+}
+if(!require("readxl")){
+  install.packages("readxl")
+}
+
+if(!require("ggplot2")){
+  install.packages("ggplot2")
+}
+
+if(!require("caret")){
+  install.packages("caret")
+}
+
+library(R.matlab)
+library(readxl)
+library(dplyr)
+library(EBImage)
+library(ggplot2)
+library(caret)
+```
+
+
+### Step 0 set work directories
+```{r wkdir, eval=FALSE}
+set.seed(0)
+getwd()
+#setwd("~/Project3-FacialEmotionRecognition/doc")
+```
+
+Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
+```{r}
+train_dir <- "../data/train_set/" # This will be modified for different data sets.
+train_image_dir <- paste(train_dir, "images/", sep="")
+train_pt_dir <- paste(train_dir,  "points/", sep="")
+train_label_path <- paste(train_dir, "label.csv", sep="") 
+```
+
+
+### Step 1: set up controls for evaluation experiments.
+
+In this chunk, we have a set of controls for the evaluation experiments. 
+
++ (T/F) process features for training set
++ (T/F) process features for test set
++ (T/F) fit gbm model on the training set
++ (T/F) run evaluation on an independent test set
+
+```{r exp_setup}
+run.feature.train <- TRUE # process features for training set
+run.feature.test <- TRUE # process features for test set
+run.gbm = TRUE # run the gbm model on the training set
+run.test = TRUE # run evaluation on an independent test set
+```
+
+
+### Step 2: import data and train-test split 
+```{r}
+#train-test split
+info <- read.csv(train_label_path)
+n <- nrow(info)
+n_train <- round(n*(4/5), 0)
+train_idx <- sample(info$Index, n_train, replace = F)
+test_idx <- setdiff(info$Index, train_idx)
+```
+
+
+If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
+```{r}
+n_files <- length(list.files(train_image_dir))
+
+image_list <- list()
+for(i in 1:100){
+   image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
+}
+```
+
+
+Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
+```{r read fiducial points}
+### Function: read fiducial points
+### Input: index
+### Output: matrix of fiducial points corresponding to the index
+readMat.matrix <- function(index){
+     return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+}
+
+# Load fiducial points
+fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+```
+
+
+### Step 3: construct features and responses
+
++ The follow plots show how pairwise distance between fiducial points can work as feature for facial emotion recognition.
+
+  + In the first column, 78 fiducials points of each emotion are marked in order. 
+  + In the second column distributions of vertical distance between right pupil(1) and  right brow peak(21) are shown in  histograms. For example, the distance of an angry face tends to be shorter than that of a surprised face.
+  + The third column is the distributions of vertical distances between right mouth corner(50)
+and the midpoint of the upper lip(52).  For example, the distance of an happy face tends to be shorter than that of a sad face.
+
+![Figure1](../figs/feature_visualization.jpg)
+
+`feature.R` should be the wrapper for all your feature engineering functions and options. The function `feature( )` should have options that correspond to different scenarios for your project and produces an R object that contains features and responses that are required by all the models you are going to evaluate later. 
+  
+  + `feature.R`
+  + Input: list of images or fiducial point
+  + Output: an RData file that contains extracted features and corresponding responses
+
+```{r feature}
+source("../lib/feature.R")
+tm_feature_train <- NA
+if(run.feature.train){
+  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+}
+
+tm_feature_test <- NA
+if(run.feature.test){
+  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+}
+
+save(dat_train, file="../output/feature_train.RData")
+save(dat_test, file="../output/feature_test.RData")
+```
+
+
+### Step 4: Train a classification model with training features and responses
+Call the train model and test model from library. 
+
+`train.R` and `test.R` should be wrappers for all your model training steps and your classification/prediction steps. 
+
++ `train.R`
+  + Input: a data frame containing features and labels and a parameter list.
+  + Output:a trained model
++ `test.R`
+  + Input: the fitted classification model using training data and processed features from testing images 
+  + Input: an R object that contains a trained classifier.
+  + Output: training model specification
+
++ In this Starter Code, we use KNN to do classification. 
+
+```{r loadlib}
+load("../output/feature_train.RData")
+load("../output/feature_test.RData")
+source("../lib/train_gbm.R")
+source("../lib/test_gbm.R")
+```
+
+```{r}
+# Rename the traget column as 'label'
+colnames(dat_train)[6007] = 'label'
+colnames(dat_test)[6007] = 'label'
+```
+
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of training model parameters.
+```{r runcv, eval=F}
+if(run.gbm){
+  # Train the Baseline GBM model
+  tm_train_gbm_baseline <- system.time(gbm.baseline <- train_gbm(train.df=dat_train, s=0.001, K=2, n=50))
+  
+  # Save the output
+  save(gbm.baseline, file="../output/gbm.baseline")
+}
+```
+
+
+### Step 5: Run test on test images
+```{r test}
+load('../output/gbm.baseline')
+run.test = TRUE
+tm_test = NA
+if(run.test){
+  tm_test_gbm_baseline <- system.time(pred_gbm_baseline <- test_gbm(gbm.fit=gbm.baseline,
+                                                                    input.test=dat_test[,-6007], 
+                                                                    n=100))
+}
+```
+
+* evaluation
+```{r}
+accu_baseline_gbm <- mean(dat_test$label == pred_gbm_baseline)
+cat("The accuracy of model: GBM baseline is", mean(dat_test$label == pred_gbm_baseline)*100, "%.\n")
+
+# Confusion Matrix 
+library(caret)
+confusionMatrix(as.factor(dat_test$label), as.factor(pred_gbm_baseline))
+```
+The accuracy of model: GBM baseline is 22.8%.
+
+Note that the accuracy is not high but is better than that of ramdom guess(4.5%). 
+
+### Summarize Running Time
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+```{r running_time}
+#cat("Time for constructing training features:", tm_train_gbm_baseline[1], "s \n")
+#cat("Time for constructing testing features:", tm_test_gbm_baseline[1], "s \n")
+cat("Time for training model:", tm_train_gbm_baseline[1], "s \n")
+cat("Time for testing model:", tm_test_gbm_baseline[1], "s \n")
+```
+
+

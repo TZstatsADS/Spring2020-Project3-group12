@@ -1,4 +1,10 @@
+title: "Lasso R"
+author: Huizhe ZHU
+output: html_notebook
+---
 
+
+newx <- model.matrix(~.-emotion_idx,data=dat_test)
 
 # lasso
 
