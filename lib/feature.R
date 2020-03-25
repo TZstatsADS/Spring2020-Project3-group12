@@ -17,25 +17,34 @@ feature <- function(input_list = fiducial_pt_list, index){
     return(as.vector(dist(vec)))
   }
   
-  ### Step 2: Write a function pairwise_dist_result to apply function in Step 1 to column of a matrix 
-  pairwise_dist_result <-function(mat){
-    ### input: a n*2 matrix(e.g. fiducial_pt_list[[1]]), output: a vector(length n(n-1))
-    return(as.vector(apply(mat, 2, pairwise_dist))) 
+  ### Step 2: Write a function euclidean_dist_result to apply function in Step 1 to column of a matrix
+  euclidean_dist_result <- function(mat){
+    euclidean_distances <- NA
+    mat_result <- as.vector(apply(mat, 2, pairwise_dist))
+    for (i in 1:(length(mat_result)/2)) {
+      euclidean_distances[i] <- sqrt(mat_result[i]^2 + mat_result[i + (length(mat_result)/2)]^2)
+    }
+    return(euclidean_distances) 
   }
   
-  ### Step 3: Apply function in Step 2 to selected index of input list, output: a feature matrix with ncol = n(n-1) = 78*77 = 6006
-  pairwise_dist_feature <- t(sapply(input_list[index], pairwise_dist_result))
-  dim(pairwise_dist_feature) 
+  ### Step 3: Apply function in Step 2 to selected index of input list, output: a feature matrix with ncol = n(n-1)/2 = 78*77/2 = 3003
+  euclidean_feature <- t(sapply(input_list[index], euclidean_dist_result))
   
   ### Step 4: construct a dataframe containing features and label with nrow = length of index
   ### column bind feature matrix in Step 3 and corresponding features
-  pairwise_data <- cbind(pairwise_dist_feature, info$emotion_idx[index])
-  ### add column names
-  colnames(pairwise_data) <- c(paste("feature", 1:(ncol(pairwise_data)-1), sep = ""), "emotion_idx")
-  ### convert matrix to data frame
-  pairwise_data <- as.data.frame(pairwise_data)
-  ### convert label column to factor
-  pairwise_data$emotion_idx <- as.factor(pairwise_data$emotion_idx)
   
-  return(feature_df = pairwise_data)
+  # if we have labels
+  if ("emotion_idx" %in% colnames(info)) {
+    feature_data <- as.data.frame(cbind(euclidean_feature, info$emotion_idx[index]))
+    colnames(feature_data) <- c(paste("feature", 1:(ncol(feature_data) - 1), sep = ""), "emotion_idx")
+    feature_data$emotion_idx <- as.factor(feature_data$emotion_idx)
+    
+    # if there are no labels
+  } else {
+    
+    feature_data <- as.data.frame(euclidean_feature)
+    colnames(feature_data) <- c(paste("feature", 1:ncol(pairwise_data), sep = ""))
+  }
+  
+  return(feature_df = feature_data)
 }

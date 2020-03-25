@@ -41,83 +41,86 @@ if(!require("glmnet")){
 }
 ```
 
-### Step 0 set work directories
-```{r wkdir, eval=FALSE}
-set.seed(0)
-#setwd("../Project 3/doc")
-# here replace it with your own path or manually set it in RStudio to where this rmd file is located. 
-# use relative path for reproducibility
-```
+### Step 0: set up controls for evaluation experiments.
 
-Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
 ```{r}
-train_dir <- "../data/train_set/" # This will be modified for different data sets.
-train_image_dir <- paste(train_dir, "images/", sep="")
-train_pt_dir <- paste(train_dir,  "points/", sep="")
-train_label_path <- paste(train_dir, "label.csv", sep="") 
+set.seed(1234)
 ```
-
-
-### Step 1: set up controls for evaluation experiments.
 
 In this chunk, we have a set of controls for the evaluation experiments. 
 
-+ (T/F) cross-validation on the training set
++ (T/F) building our model with training data
 + (number) K, the number of CV folds
 + (0 or 1) alpha, lasso or ridge regression
-+ (T/F) process features for training set
-+ (T/F) run evaluation on an independent test set
-+ (T/F) process features for test set
-+ (T/F) labels present in dataset
-+ (T/F) test on new data
++ (T/F) process features
++ (T/F) testing our trained model on new data
 
-```{r exp_setup}
-run.cv <- TRUE # run cross-validation on the training set
+```{r}
+training <- TRUE
 
 K <- 5  # number of CV folds
 
 alpha <- 1 # alpha 1 is lasso, 0 is ridge
 
-run.feature.train <- TRUE # process features for training set
+run.feature <- TRUE # process features for data
 
-run.test <- TRUE # run evaluation on an independent test set
-
-run.feature.test <- TRUE # process features for test set
-
-data.labels <- TRUE # provides accuracy when dataset has labels
-
-run.new.test <- TRUE # run model on a new, never seen before, dataset
+testing <- FALSE # run model on a new, never seen before, dataset
 ```
-Using cross-validationwe compare the performance of LASSO/Ridge models with different specifications. Here, we tune parameter lambda, the loss coefficient, in multinomial LASSO and Ridge regressions.
 
-### Step 2: import data and train-test split 
+### Step 1 set work directories
+
+Provide directories for training/testing images. Training/testing images and training/testing fiducial points will be in different subfolders. 
 ```{r}
-#train-test split
-info <- read.csv(train_label_path)
+if (training) {
+  train_dir <- "../data/train_set/" # This will be modified for different data sets.
+  train_image_dir <- paste(train_dir, "images/", sep="")
+  train_pt_dir <- paste(train_dir,  "points/", sep="")
+  train_label_path <- paste(train_dir, "label.csv", sep="")
+}
+ 
+if (testing) {
+  test_dir <- "../data/test_set/" # This will be modified for different data sets.
+  test_image_dir <- paste(test_dir, "images/", sep="")
+  test_pt_dir <- paste(test_dir,  "points/", sep="")
+  test_label_path <- paste(test_dir, "label.csv", sep="") 
+}
 
-if (run.new.test) {
-  test_idx <- info$Index
-} else {
-  
-  # split 80% training, 20% testing
-  train_test_split <- sample(info$Index, floor(nrow(info) * 0.8), replace = FALSE)
-  train_idx <- info$Index[train_test_split]
-  test_idx <- info$Index[-train_test_split]
+```
+
+### Step 2: import data 
+```{r}
+if (training) {
+  info <- read.csv(train_label_path)
+}
+
+if (testing) {
+  info <- read.csv(test_label_path)
 }
 ```
 
 If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
 ```{r}
-n_files <- length(list.files(train_image_dir))
+if (training) {
+  n_files <- length(list.files(train_image_dir))
 
-image_list <- list()
-for(i in 1:100){
+  image_list <- list()
+  for(i in 1:100){
    image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
+  }
+}
+
+if (testing) {
+  n_files <- length(list.files(test_image_dir))
+
+  image_list <- list()
+  for(i in 1:100){
+   image_list[[i]] <- readImage(paste0(test_image_dir, sprintf("%04d", i), ".jpg"))
+  }
 }
 ```
 
 Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
-```{r read fiducial points}
+```{r}
 #function to read fiducial points
 #input: index
 #output: matrix of fiducial points corresponding to the index
@@ -126,8 +129,15 @@ readMat.matrix <- function(index){
 }
 
 #load fiducial points
-fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
-save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+if (training) {
+  train_fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+  save(train_fiducial_pt_list, file="../output/train_fiducial_pt_list.RData")
+}
+
+if (testing) {
+  test_fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+  save(test_fiducial_pt_list, file="../output/test_fiducial_pt_list.RData")
+}
 ```
 
 ### Step 3: construct features and responses
@@ -147,22 +157,20 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
   + Input: list of images or fiducial point
   + Output: an RData file that contains extracted features and corresponding responses
 
-```{r feature}
+```{r}
 source("../lib/feature.R")
-tm_feature_train <- NA
-if(run.feature.train){
-  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+tm_feature <- NA
+if(training & run.feature){
+  tm_feature <- system.time(all_train_data <- feature(train_fiducial_pt_list, seq(1, nrow(info), 1)))
+  save(all_train_data, file="../output/feature_train.RData")
+  load(file="../output/feature_train.RData")
 }
 
-tm_feature_test <- NA
-if(run.feature.test){
-  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+if(testing & run.feature){
+  tm_feature <- system.time(all_test_data <- feature(test_fiducial_pt_list, seq(1, nrow(info), 1)))
+  save(all_test_data, file="../output/feature_test.RData")
+  load(file="../output/feature_test.RData")
 }
-
-save(dat_train, file="../output/feature_train.RData")
-save(dat_test, file="../output/feature_test.RData")
-load(file="../output/feature_train.RData")
-load(file="../output/feature_test.RData")
 ```
 
 ### Step 4: Train a classification model with training features and responses
@@ -178,26 +186,20 @@ Call the train model and test model from library.
   + Input: an R object that contains a trained classifier.
   + Output: training model specification
 
-```{r loadlib}
-source("../lib/train_ridge_lasso.R")
-source("../lib/test_ridge_lasso.R")
-```
-
 ```{r}
-# load(file="../output/train_euc.RData")
-# sample <- sample.int(nrow(train_set_euc), size = floor(0.8 * nrow(train_set_euc)), replace = F)
-# dat_train <- train_set_euc[sample, ]
-# dat_test <- train_set_euc[-sample, ]
+source("../lib/regression.train.R")
+source("../lib/regression.test.R")
+source("../lib/regression.cv.R")
 ```
 
 #### Model selection with cross-validation
 * Do model selection by choosing among different values of training model parameters.
-```{r runcv}
-if(run.cv){
-  tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=dat_train, alpha=alpha, K=K))
+```{r}
+if(training){
+  tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
   
   alpha <- 0
-  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=dat_train, alpha=alpha, K=K))
+  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
   
   save(cv_lasso_models, file="../output/cv_lasso_models.RData")
   save(cv_ridge_models, file="../output/cv_ridge_models.RData")
@@ -207,46 +209,30 @@ load(file="../output/cv_ridge_models.RData")
 ```
 
 Visualize cross-validation results. 
-```{r cv_vis}
-if(run.cv){
+```{r}
+if(training){
   plot(cv_lasso_models)
   plot(cv_ridge_models)
 }
 ```
 
-### Step 5: Run test on test images
-```{r test}
-tm_test_lasso <- NA
-tm_test_ridge <- NA
-if(run.test){
-  tm_test_lasso <- system.time(lasso_pred <- regression.test(cv_lasso_models, dat_test))
-  tm_test_ridge <- system.time(ridge_pred <- regression.test(cv_ridge_models, dat_test))
-}
-```
+### Step 5: Run test on test images and evaluate
 
 * MODELS EVALUATION
 ```{r}
-if(data.labels) {
-  lasso_accu <- mean(dat_test$emotion_idx == lasso_pred)
-  ridge_accu <- mean(dat_test$emotion_idx == ridge_pred)
-  cat("The accuracy of the LASSO model is", lasso_accu*100, "%.\n")
-  cat("The accuracy of the Ridge model is", ridge_accu*100, "%.\n")
-
-  lasso_confusion <- confusionMatrix(as.factor(lasso_pred), as.factor(dat_test$emotion_idx))
-  ridge_confusion <- confusionMatrix(as.factor(ridge_pred), as.factor(dat_test$emotion_idx))
-  print(lasso_confusion)
-  print(ridge_confusion)
-}
+tm_test_lasso <- system.time(lasso_accuracy <- regression.cv(models=cv_lasso_models, data=all_train_data, K=K))
+tm_test_ridge <- system.time(ridge_accuracy <- regression.cv(models=cv_ridge_models, data=all_train_data, K=K))
+cat("The mean training accuracy of the LASSO model is", lasso_accuracy[1]*100, "%.\n")
+cat("The mean predicted testing accuracy of the LASSO model is", lasso_accuracy[2]*100, "%.\n")
+cat("The mean training accuracy of the Ridge model is", ridge_accuracy[1]*100, "%.\n")
+cat("The mean predicted testing accuracy of the Ridge model is", ridge_accuracy[2]*100, "%.\n")
 ```
 
 Writing to .csv file containing image index and predicted emotion
 ```{r}
-if (run.new.test) {
-  # mean cross-validation errors for the models
-  lasso_accu <- cv_lasso_models$cvm[match(cv_lasso_models$lambda.min, cv_lasso_models$lambda)]
-  ridge_accu <- cv_ridge_models$cvm[match(cv_ridge_models$lambda.min, cv_ridge_models$lambda)]
-  cat("The predicted accuracy of the LASSO model is", lasso_accu*100, "%.\n")
-  cat("The predicted accuracy of the Ridge model is", ridge_accu*100, "%.\n")
+if (testing) {
+ lasso_pred <- regression.test(cv_lasso_models, all_test_data)
+  ridge_pred <- regression.test(cv_ridge_models, all_test_data)
   lasso_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = lasso_pred)
   ridge_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = ridge_pred)
   write.csv(lasso_labels, 'lasso_labels.csv')
@@ -256,9 +242,8 @@ if (run.new.test) {
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
-```{r running_time}
-cat("Time for constructing training features =", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features =", tm_feature_test[1], "s \n")
+```{r}
+cat("Time for constructing features =", tm_feature[1], "s \n")
 cat("Time for training the LASSO model =", tm_train_lasso[1], "s \n")
 cat("Time for training the Ridge model =", tm_train_ridge[1], "s \n")
 cat("Time for testing the LASSO model =", tm_test_lasso[1], "s \n")
