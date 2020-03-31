@@ -6,13 +6,13 @@
 
 Term: Spring 2020
 
-+ Team ##
++ Team 12
 + Team members
-	+ team member 1
-	+ team member 2
-	+ team member 3
-	+ team member 4
-	+ team member 5
+	+ Gao, Qing (qg2175)
+	+ Liu, Yuqiao (yl4278)
+	+ Wolansky, Ivan (iaw2110)
+	+ Yan, Xiyao (xy2431)
+	+ Zhu, Huizhe (hz2657) Presentor
 
 + Project summary: In this project, we created a classification engine for facial emotion recognition. 
 	
