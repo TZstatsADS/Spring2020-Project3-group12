@@ -14,7 +14,7 @@ Term: Spring 2020
 	+ Yan, Xiyao (xy2431)
 	+ Zhu, Huizhe (hz2657) Presentor
 
-+ Project summary: In this project, we created a classification engine for facial emotion recognition. 
++ Project summary: In this project, we created a classification engine for facial emotion recognition. We built Lasso/Ridge, Tree-based models, SVM, Voting classifier, and Bagging models based on 2500 image data. The prediction accuracy on test set improves from 22.8% (Baseline model) to 54.28% (final advanced model). 
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
