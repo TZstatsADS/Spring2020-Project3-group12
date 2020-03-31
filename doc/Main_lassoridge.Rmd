@@ -39,6 +39,14 @@ if(!require("caret")){
 if(!require("glmnet")){
   install.packages("glmnet")
 }
+
+if(!require("caret")){
+  install.packages("caret")
+}
+
+if(!require("MLmetrics")){
+  install.packages("MLmetrics")
+}
 ```
 
 ### Step 0: set up controls for evaluation experiments.
@@ -56,7 +64,7 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (T/F) testing our trained model on new data
 
 ```{r}
-training <- TRUE
+training <- FALSE
 
 K <- 5  # number of CV folds
 
@@ -64,7 +72,7 @@ alpha <- 1 # alpha 1 is lasso, 0 is ridge
 
 run.feature <- TRUE # process features for data
 
-testing <- FALSE # run model on a new, never seen before, dataset
+testing <- TRUE # run model on a new, never seen before, dataset
 ```
 
 ### Step 1 set work directories
@@ -163,13 +171,11 @@ tm_feature <- NA
 if(training & run.feature){
   tm_feature <- system.time(all_train_data <- feature(train_fiducial_pt_list, seq(1, nrow(info), 1)))
   save(all_train_data, file="../output/feature_train.RData")
-  load(file="../output/feature_train.RData")
 }
 
 if(testing & run.feature){
   tm_feature <- system.time(all_test_data <- feature(test_fiducial_pt_list, seq(1, nrow(info), 1)))
   save(all_test_data, file="../output/feature_test.RData")
-  load(file="../output/feature_test.RData")
 }
 ```
 
@@ -194,6 +200,7 @@ source("../lib/regression.cv.R")
 
 #### Model selection with cross-validation
 * Do model selection by choosing among different values of training model parameters.
+
 ```{r}
 if(training){
   tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
@@ -204,8 +211,11 @@ if(training){
   save(cv_lasso_models, file="../output/cv_lasso_models.RData")
   save(cv_ridge_models, file="../output/cv_ridge_models.RData")
 }
-load(file="../output/cv_lasso_models.RData")
-load(file="../output/cv_ridge_models.RData")
+
+if(testing) {
+  load(file="../output/cv_lasso_models.RData")
+  load(file="../output/cv_ridge_models.RData")
+}
 ```
 
 Visualize cross-validation results. 
@@ -220,23 +230,22 @@ if(training){
 
 * MODELS EVALUATION
 ```{r}
-tm_test_lasso <- system.time(lasso_accuracy <- regression.cv(models=cv_lasso_models, data=all_train_data, K=K))
-tm_test_ridge <- system.time(ridge_accuracy <- regression.cv(models=cv_ridge_models, data=all_train_data, K=K))
-cat("The mean training accuracy of the LASSO model is", lasso_accuracy[1]*100, "%.\n")
-cat("The mean predicted testing accuracy of the LASSO model is", lasso_accuracy[2]*100, "%.\n")
-cat("The mean training accuracy of the Ridge model is", ridge_accuracy[1]*100, "%.\n")
-cat("The mean predicted testing accuracy of the Ridge model is", ridge_accuracy[2]*100, "%.\n")
+if (training) {
+  lasso_accuracy <- regression.cv(models=cv_lasso_models, data=all_train_data, K=K, alpha=1)
+  ridge_accuracy <- regression.cv(models=cv_ridge_models, data=all_train_data, K=K, alpha=0)
+  cat("The cross-validation accuracy of the LASSO model is", lasso_accuracy*100, "%.\n")
+  cat("The cross-validation accuracy of the Ridge model is", ridge_accuracy*100, "%.\n")
+}
+
 ```
 
 Writing to .csv file containing image index and predicted emotion
 ```{r}
 if (testing) {
- lasso_pred <- regression.test(cv_lasso_models, all_test_data)
-  ridge_pred <- regression.test(cv_ridge_models, all_test_data)
-  lasso_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = lasso_pred)
-  ridge_labels <- data.frame(index = 1:nrow(dat_test), identity = rep(NA, nrow(dat_test)), emotion_idx = ridge_pred)
-  write.csv(lasso_labels, 'lasso_labels.csv')
-  write.csv(ridge_labels, 'ridge_labels.csv')
+  tm_test_lasso <- system.time(lasso_labels <- regression.test(cv_lasso_models, all_test_data, info))
+  tm_test_ridge <- system.time(ridge_labels <- regression.test(cv_ridge_models, all_test_data, info))
+  write.csv(lasso_pred, 'lasso_labels.csv')
+  write.csv(ridge_pred, 'ridge_labels.csv')
 } 
 ```
 
