@@ -12,7 +12,7 @@ output:
     df_print: paged
 ---
 
-```{r, message=FALSE, include=FALSE, warning=FALSE}
+```{r, message=FALSE, include=FALSE, warning=FALSE, eval=FALSE}
 if(!require("EBImage")){
   install.packages("BiocManager") 
   BiocManager::install("EBImage")
@@ -53,6 +53,22 @@ if(!require("MLmetrics")){
 if(!require("gbm")){
   install.packages("gbm")
 }
+if(!require("tidyr")){
+  install.packages("tidyr")
+}
+if(!require("neuralnet")){
+  install.packages("neuralnet")
+}
+if(!require("e1071")){
+  install.packages("e1071")
+}
+if(!require("reticulate")){
+  install.packages("reticulate")
+}
+py_install("pandas")
+py_install("scipy")
+py_install("scikit-learn")
+
 ```
 
 # GBM - BASELINE
@@ -63,7 +79,7 @@ set.seed(0)
 ```
 
 Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
-```{r}
+```{r, eval=FALSE}
 train_dir <- "../data/train_set/" # This will be modified for different data sets.
 train_image_dir <- paste(train_dir, "images/", sep="")
 train_pt_dir <- paste(train_dir,  "points/", sep="")
@@ -79,11 +95,11 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (T/F) fit gbm model on the training set
 + (T/F) run evaluation on an independent test set
 
-```{r exp_setup}
-run.feature.train <- FALSE # process features for training set
-run.feature.test <- FALSE # process features for test set
-run.gbm = FALSE # run the gbm model on the training set
-run.test = FALSE # run evaluation on an independent test set
+```{r exp_setup, eval=FALSE}
+run.feature.train <- TRUE # process features for training set
+run.feature.test <- TRUE # process features for test set
+run.gbm = TRUE # run the gbm model on the training set
+run.test = TRUE # run evaluation on an independent test set
 ```
 
 
@@ -145,12 +161,12 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
 source("../lib/feature_baseline.R")
 tm_feature_train <- NA
 if(run.feature.train){
-  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+  tm_feature_train <- system.time(dat_train <- feature_baseline(fiducial_pt_list, train_idx))
 }
 
 tm_feature_test <- NA
 if(run.feature.test){
-  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+  tm_feature_test <- system.time(dat_test <- feature_baseline(fiducial_pt_list, test_idx))
 }
 
 save(dat_train, file="../output/feature_train.RData")
@@ -170,8 +186,6 @@ Call the train model and test model from library.
   + Input: the fitted classification model using training data and processed features from testing images 
   + Input: an R object that contains a trained classifier.
   + Output: model predictions
-
-+ In this Starter Code, we use KNN to do classification. 
 
 ```{r loadlib}
 load("../output/feature_train.RData")
@@ -206,7 +220,7 @@ tm_test = NA
 if(run.test){
   tm_test_gbm_baseline <- system.time(pred_gbm_baseline <- test_gbm(gbm.fit=gbm.baseline,
                                                                     input.test=dat_test[,-6007], 
-                                                                    n=100))
+                                                                    n=50))
 }
 ```
 
@@ -249,7 +263,7 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (0 or 1) alpha, lasso or ridge regression
 + (T/F) process features
 
-```{r}
+```{r, eval=FALSE}
 training <- TRUE # train model
 
 K <- 5  # number of CV folds
@@ -262,7 +276,7 @@ run.feature <- TRUE # process features for data
 ### Step 1 set work directories
 
 Provide directories for training images. Training images and training fiducial points will be in different subfolders. 
-```{r}
+```{r, eval=FALSE}
 if (training) {
   train_dir <- "../data/train_set/" # This will be modified for different data sets.
   train_image_dir <- paste(train_dir, "images/", sep="")
@@ -355,22 +369,15 @@ source("../lib/regression.cv.R")
 ```{r, eval=FALSE}
 if(training){
   tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
-  
-  alpha <- 0
-  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
-  
   save(cv_lasso_models, file="../output/cv_lasso_models.RData")
-  save(cv_ridge_models, file="../output/cv_ridge_models.RData")
 }
 ```
 
 Visualize cross-validation results. 
-```{r}
+```{r, eval=FALSE}
 if(training){
   load(file="../output/cv_lasso_models.RData")
-  load(file="../output/cv_ridge_models.RData")
   plot(cv_lasso_models)
-  plot(cv_ridge_models)
 }
 ```
 
@@ -380,10 +387,8 @@ if(training){
 # estimates accuracy by finding the cross-validation accuracy with the optimal lambda parameter already found
 ```{r, eval=FALSE}
 if (training) {
-  lasso_accuracy <- regression.cv(models=cv_lasso_models, data=all_train_data, K=K, alpha=1)
-  ridge_accuracy <- regression.cv(models=cv_ridge_models, data=all_train_data, K=K, alpha=0)
+  lasso_accuracy <- regression.cv(models=cv_lasso_models, data=all_train_data, K=K, alpha=alpha)
   cat("The cross-validation accuracy of the LASSO model is", lasso_accuracy*100, "%.\n")
-  cat("The cross-validation accuracy of the Ridge model is", ridge_accuracy*100, "%.\n")
 }
 ```
 
@@ -395,14 +400,12 @@ Prediction performance matters, so does the running times for constructing featu
 ```{r, eval=FALSE}
 cat("Time for constructing features =", tm_feature[1], "s \n")
 cat("Time for training the LASSO model =", tm_train_lasso[1], "s \n")
-cat("Time for training the Ridge model =", tm_train_ridge[1], "s \n")
 ```
 
 Time for constructing features = 4.99 s 
 Time for training the LASSO model = 818.78 s 
-Time for training the Ridge model = 1716.54 s 
 
-# TESTING MODELS
+# SUPPLEMENTAL RIDGE:
 
 ### Step 0: set up controls for evaluation experiments.
 
@@ -412,114 +415,313 @@ set.seed(1234)
 
 In this chunk, we have a set of controls for the evaluation experiments. 
 
++ (T/F) building our model with training data
++ (number) K, the number of CV folds
++ (0 or 1) alpha, lasso or ridge regression
 + (T/F) process features
-+ (T/F) testing our trained model on new data
 
 ```{r, eval=FALSE}
-run.feature <- TRUE # process features for data
+training <- TRUE # train model
 
-testing <- TRUE # run model on a new, never seen before, dataset
+K <- 5  # number of CV folds
+
+alpha <- 0 # alpha 1 is lasso, 0 is ridge
+
+run.feature <- TRUE # process features for data
 ```
 
 ### Step 1 set work directories
 
-Provide directories for training/testing images. Training/testing images and training/testing fiducial points will be in different subfolders. 
+Provide directories for training images. Training images and training fiducial points will be in different subfolders. 
 ```{r, eval=FALSE}
-if (testing) {
-  test_dir <- "../data/test_set/" # This will be modified for different data sets.
-  test_image_dir <- paste(test_dir, "images/", sep="")
-  test_pt_dir <- paste(test_dir,  "points/", sep="")
-  test_label_path <- paste(test_dir, "label.csv", sep="") 
+if (training) {
+  train_dir <- "../data/train_set/" # This will be modified for different data sets.
+  train_image_dir <- paste(train_dir, "images/", sep="")
+  train_pt_dir <- paste(train_dir,  "points/", sep="")
+  train_label_path <- paste(train_dir, "label.csv", sep="")
 }
 ```
 
 ### Step 2: import data 
 ```{r, eval=FALSE}
-if (testing) {
-  info <- read.csv(test_label_path)
+if (training) {
+  info <- read.csv(train_label_path)
 }
 ```
 
+If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
 ```{r, eval=FALSE}
-if (testing) {
-  n_files <- length(list.files(test_image_dir))
+if (training) {
+  n_files <- length(list.files(train_image_dir))
 
   image_list <- list()
   for(i in 1:100){
-   image_list[[i]] <- readImage(paste0(test_image_dir, sprintf("%04d", i), ".jpg"))
+   image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
   }
 }
 ```
 
 Fiducial points are stored in matlab format. In this step, we read them and store them in a list.
 ```{r, eval=FALSE}
-if (testing) {
+#load fiducial points
+if (training) {
   #function to read fiducial points
   #input: index
   #output: matrix of fiducial points corresponding to the index
   readMat.matrix <- function(index){
-       return(round(readMat(paste0(test_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+     return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
   }
-  
-  test_fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
-  save(test_fiducial_pt_list, file="../output/test_fiducial_pt_list.RData")
+  train_fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
+  save(train_fiducial_pt_list, file="../output/train_fiducial_pt_list.RData")
 }
 ```
 
-### Step 3: Feature extraction
+### Step 3: construct features and responses
+
++ The follow plots show how pairwise distance between fiducial points can work as feature for facial emotion recognition.
+
+  + In the first column, 78 fiducials points of each emotion are marked in order. 
+  + In the second column distributions of vertical distance between right pupil(1) and  right brow peak(21) are shown in  histograms. For example, the distance of an angry face tends to be shorter than that of a surprised face.
+  + The third column is the distributions of vertical distances between right mouth corner(50)
+and the midpoint of the upper lip(52).  For example, the distance of an happy face tends to be shorter than that of a sad face.
+
+![Figure1](../figs/feature_visualization.jpg)
+
+`feature.R` should be the wrapper for all your feature engineering functions and options. The function `feature( )` should have options that correspond to different scenarios for your project and produces an R object that contains features and responses that are required by all the models you are going to evaluate later. 
+  
+  + `feature_regression.R`
+  + Input: list of images or fiducial point
+  + Output: an RData file that contains extracted features and corresponding responses
 
 ```{r, eval=FALSE}
-source("../lib/feature_baseline.R")
 source("../lib/feature_regression.R")
-
-if(testing & run.feature){
-  tm_feature_baseline <- system.time(all_test_data_baseline <- feature_baseline(test_fiducial_pt_list, seq(1, nrow(info), 1)))
-  
-  tm_feature_lasso <- system.time(all_test_data_lasso <- feature_regression(test_fiducial_pt_list, seq(1, nrow(info), 1)))
-  
-  save(all_test_data_baseline, file="../output/feature_test_baseline.RData")
-  save(all_test_data_lasso, file="../output/feature_test_lasso.RData")
+tm_feature <- NA
+if(training & run.feature){
+  tm_feature <- system.time(all_train_data <- feature(train_fiducial_pt_list, seq(1, nrow(info), 1)))
+  save(all_train_data, file="../output/feature_train.RData")
 }
 ```
 
+### Step 4: Train a classification model with training features and responses
+Call the train model and test model from library. 
+
+`train.R` and `test.R` should be wrappers for all your model training steps and your classification/prediction steps. 
+
++ `regression.train.R`
+  + Input: a data frame containing features and labels and a parameter list.
+  + Output:a trained model
++ `regression.test.R`
+  + Input: the fitted classification model using training data and processed features from testing images 
+  + Input: an R object that contains a trained classifier.
+  + Output: model predictions
+
 ```{r, eval=FALSE}
-source("../lib/test_gbm.R")
-source("../lib/regression.test.R")
+source("../lib/regression.train.R")
+source("../lib/regression.cv.R")
 ```
 
-### Step 4: Import Fitted Models
+#### Model selection with cross-validation
+* Do model selection by choosing among different values of the lambda parameter.
 
 ```{r, eval=FALSE}
-if(testing) {
-  load(file="../output/gbm.baseline")
-  load(file="../output/cv_lasso_models.RData")
+if(training){
+  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
+  
+  save(cv_ridge_models, file="../output/cv_ridge_models.RData")
 }
 ```
 
+Visualize cross-validation results. 
 ```{r, eval=FALSE}
-labels_prediction <- read.csv("../output/labels_prediction.csv")
+if(training){
+  load(file="../output/cv_ridge_models.RData")
+  plot(cv_ridge_models)
+}
 ```
 
-### Step 5: Make Predictions
+### Step 5: Run test on test images and evaluate
 
+* MODELS EVALUATION
+# estimates accuracy by finding the cross-validation accuracy with the optimal lambda parameter already found
 ```{r, eval=FALSE}
-if (testing) {
-  tm_test_baseline <- system.time(labels_prediction$Baseline <- test_gbm(gbm.fit=gbm.baseline,
-                                                                    input.test=all_test_data_baseline, 
-                                                                    n=100))
-  
-  tm_test_lasso <- system.time(labels_prediction$Advanced <- regression.test(cv_lasso_models, all_test_data_lasso))
-  
-  write.csv(labels_prediction, "../output/labels_prediction.csv")
-} 
+if (training) {
+  ridge_accuracy <- regression.cv(models=cv_ridge_models, data=all_train_data, K=K, alpha=alpha)
+  cat("The cross-validation accuracy of the Ridge model is", ridge_accuracy*100, "%.\n")
+}
 ```
+
+The cross-validation accuracy of the Ridge model is 49.57992 %.
 
 ### Summarize Running Time
-
+Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r, eval=FALSE}
-cat("Time for constructing baseline features =", tm_feature_baseline[1], "s \n")
-cat("Time for testing baseline model:", tm_test_baseline[1], "s \n")
-cat("Time for constructing LASSO features =", tm_feature_lasso[1], "s \n")
-cat("Time for testing the LASSO model =", tm_test_lasso[1], "s \n")
+cat("Time for constructing features =", tm_feature[1], "s \n")
+cat("Time for training the Ridge model =", tm_train_ridge[1], "s \n")
 ```
 
+Time for constructing features = 4.99 s 
+Time for training the Ridge model = 1716.54 s 
+
+# SUPPLEMENTAL PCA w/ SVM:
+
+```{r, eval=FALSE}
+#_____________________________________________________#
+# loading in feature data
+load("train_euc.RData")
+
+set.seed(5243)
+sample<-sample(1:2500,250,replace = F)
+SAMPLE<-sample(1:2250,250,replace = F)
+data_train<-train_set_euc[-sample,]
+data_validation<-data_train[SAMPLE,]
+data_train<-data_train[-SAMPLE,]
+data_test<-train_set_euc[sample,]
+```
+
+
+```{r, eval=FALSE}
+#__________Directly build SVM model____________________#
+traindata<-rbind(data_train,data_validation)
+testdata<-data_test
+svm<-svm(traindata[,-3004],y = as.factor(traindata[,3004]))
+p<-predict(svm,newdata = testdata[,-3004])
+MSE<-mean(p != as.factor(testdata[,3004]))
+```
+
+```{r, eval=FALSE}
+#___________PCA&SVM(TRAIN,VALIDATION & TEST SET)_______________________#
+train_pca<-prcomp(data_train[,-3004])
+sdev<-train_pca$sdev
+sum(sdev[1:500]^2)/sum(sdev^2)
+validation_pca<-scale(data_validation[,-3004], train_pca$center, train_pca$scale) %*% train_pca$rotation
+svm_list<-list()
+MSE_validation<-c()
+for(i in 1:500){
+  svm<-svm(train_pca$x[,1:i],y = as.factor(data_train[,3004]))
+  svm_list[[i]]<-svm
+  mean(svm$fitted != as.factor(data_train[,3004]))
+  p<-predict(svm,newdata = validation_pca[,1:i])
+  MSE_validation[i]<-mean(p != as.factor(data_validation[,3004]))
+}
+plot(x = 1:500,MSE_validation)
+which.min(MSE_validation)
+#I've just got svm model using the first 500 PC because of limited RAM(TAT)#
+```
+
+```{r, eval=FALSE}
+#_________select first 57th PC to build the SVM model_________#
+model_svm<-svm_list[[57]]
+
+mypredict<-function(data){
+  test_pca<-scale(data, train_pca$center, train_pca$scale) %*% train_pca$rotation
+  p<-predict(model_svm,newdata = test_pca[,1:57])
+  return(p)
+}
+p<-mypredict(data_test[,-3004])
+mean(p != as.factor(data_test[,3004]))
+
+save(train_pca,model_svm,mypredict,file = "model_pca+svm.RData")
+save(data_test,file = "test_data.RData")
+```
+
+SVM w/ PCA accuracy: 50.8%
+Time for training SVM w/ PCA model > 3 hours.
+
+# SUPPLEMENTAL VOTING CLASSIFIER (Logistic Regression, Ridge, SVM)
+
+## Packages for python
+```{python Packages, eval=FALSE}
+import os
+import time
+import numpy as np
+import pandas as pd
+from scipy.io import loadmat
+from scipy.spatial.distance import cdist
+from sklearn.ensemble import VotingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from sklearn.decomposition import PCA
+from sklearn.linear_model import RidgeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.exceptions import ConvergenceWarning
+from  warnings import simplefilter
+
+simplefilter("ignore", category=ConvergenceWarning)
+
+```
+
+## Features Extraction
+```{python  feature Extraction, eval=FALSE}
+def dist(file):
+    name = list(file.keys())[-1]
+    dat = file[name]
+    dist_mat = cdist(dat, dat, 'euclidean')
+    return dist_mat[np.triu_indices(78, 1)].flatten()
+
+# Read Train datasets
+s = time.time()
+train_label = pd.read_csv('../data/train_set/label.csv')
+file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+
+X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+y_train = train_label['emotion_idx']
+print(f'Training features extraction time: {time.time()-s:.4f} seconds')
+groups = y_train
+
+# # Read Test datasets
+# s = time.time()
+
+# file_path = [os.path.join('../data/test_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+# X_test = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+# print(f'Test features extraction time: {time.time()-s:.4f} seconds')
+```
+## Set the model parameters
+```{python Set the model parameters, eval=FALSE}
+svm = SVC(kernel='linear', C=.0001, decision_function_shape='ovo')
+ridge = RidgeClassifier(alpha=85)
+logistic = LogisticRegression()
+pca = PCA(n_components=128)
+
+estimators = [('svm', svm), ('ridge', ridge), ('logi', logistic)]
+voting = VotingClassifier(estimators=estimators, voting='hard')
+
+```
+
+## Cross-Validation
+```{python Cross-Validation, eval=FALSE}
+train_scores = []
+test_scores = []
+times = []
+X = X_train
+y = y_train
+for i in range(10):
+    s = time.time()
+    X_train, X_validation, y_train, y_validation = train_test_split(X, y, test_size=.2, shuffle=True, stratify=y)
+    X_train_pca = pca.fit_transform(X_train)
+    X_validation_pca = pca.transform(X_validation)
+
+    voting.fit(X_train_pca, y_train)
+
+    test_pred = voting.predict(X_validation_pca)
+    times.append(time.time() - s)
+
+    train_pred = voting.predict(X_train_pca)
+
+    train_score = accuracy_score(y_train, train_pred)
+    test_score = accuracy_score(y_validation, test_pred)
+
+    train_scores.append(train_score)
+    test_scores.append(test_score)
+
+```
+
+## Predicted Train and Test Score by CVs
+```{python Predicted Train and Test Score by CVs, eval=FALSE}
+print(f'The mean Train Score of Voting is {np.array(train_scores).mean():.4f}')
+print(f'The mean Test Score of Voting is {np.array(test_scores).mean():.4f}')
+print(f'The mean Time per CVs of Voting is {np.array(times).mean():.4f} seconds')
+```
+
+Mean test score of voting is 52.32 %
+Mean time per CV of voting is 2.57 s.
