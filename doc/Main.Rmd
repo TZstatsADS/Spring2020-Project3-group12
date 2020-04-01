@@ -80,10 +80,10 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (T/F) run evaluation on an independent test set
 
 ```{r exp_setup}
-run.feature.train <- FALSE # process features for training set
-run.feature.test <- FALSE # process features for test set
-run.gbm = FALSE # run the gbm model on the training set
-run.test = FALSE # run evaluation on an independent test set
+run.feature.train <- TRUE # process features for training set
+run.feature.test <- TRUE # process features for test set
+run.gbm = TRUE # run the gbm model on the training set
+run.test = TRUE # run evaluation on an independent test set
 ```
 
 
@@ -145,12 +145,12 @@ and the midpoint of the upper lip(52).  For example, the distance of an happy fa
 source("../lib/feature_baseline.R")
 tm_feature_train <- NA
 if(run.feature.train){
-  tm_feature_train <- system.time(dat_train <- feature(fiducial_pt_list, train_idx))
+  tm_feature_train <- system.time(dat_train <- feature_baseline(fiducial_pt_list, train_idx))
 }
 
 tm_feature_test <- NA
 if(run.feature.test){
-  tm_feature_test <- system.time(dat_test <- feature(fiducial_pt_list, test_idx))
+  tm_feature_test <- system.time(dat_test <- feature_baseline(fiducial_pt_list, test_idx))
 }
 
 save(dat_train, file="../output/feature_train.RData")
