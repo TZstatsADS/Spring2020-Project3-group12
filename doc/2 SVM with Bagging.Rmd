@@ -1,0 +1,129 @@
+---
+title: "R - Python"
+author: Yuqiao Liu
+output: html_notebook
+---
+
+
+
+```{r Python create environment, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Run this chunk at the first time
+
+install.packages("reticulate")
+py_install("pandas")
+py_install("scipy")
+py_install("scikit-learn")
+
+```
+
+```{r, message=FALSE}
+library(reticulate)
+```
+## Packages for python
+```{python Packages}
+import os
+import time
+import numpy as np
+import pandas as pd
+from scipy.io import loadmat
+from scipy.spatial.distance import cdist
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from sklearn.decomposition import PCA
+```
+
+## Features Extraction
+```{python  feature Extraction}
+def dist(file):
+    name = list(file.keys())[-1]
+    dat = file[name]
+    dist_mat = cdist(dat, dat, 'euclidean')
+    return dist_mat[np.triu_indices(78, 1)].flatten()
+
+# Read Train datasets
+s = time.time()
+train_label = pd.read_csv('../data/train_set/label.csv')
+file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+
+X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+y_train = train_label['emotion_idx']
+print(f'Training features extraction time: {time.time()-s:.4f} seconds')
+groups = y_train
+
+
+
+# # Read Test datasets
+# s = time.time()
+
+# file_path = [os.path.join('../data/test_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+# X_test = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+# print(f'Test features extraction time: {time.time()-s:.4f} seconds')
+```
+## Set the model parameters
+```{python Set the model parameters}
+svm = SVC(kernel='linear', C=.0001, decision_function_shape='ovo')
+svm_bag = BaggingClassifier(svm, n_estimators=500, n_jobs=1, verbose=True)
+pca = PCA(n_components=128)
+
+```
+
+## Cross-Validation
+```{python Cross-Validation, eval=FALSE, include=FALSE}
+train_scores = []
+test_scores = []
+times = []
+X = X_train
+y = y_train
+for i in range(5):
+   s = time.time()
+   X_train, X_validation, y_train, y_validation = train_test_split(X, 
+                                                                   y, 
+                                                                   test_size=.2, 
+                                                                   shuffle=True, 
+                                                                   stratify=y)
+   
+   X_train_pca = pca.fit_transform(X_train)
+   X_validation_pca = pca.transform(X_validation)
+   
+   svm_bag.fit(X_train_pca, y_train)
+   test_pred = svm_bag.predict(X_validation_pca)
+   
+   times.append(time.time() - s)
+
+   train_pred = svm_bag.predict(X_train_pca)
+
+   train_score = accuracy_score(y_train, train_pred)
+   test_score = accuracy_score(y_validation, test_pred)
+
+   train_scores.append(train_score)
+   test_scores.append(test_score)
+```
+
+## Predicted Train and Test Score by CVs
+```{python Predicted Train and Test Score by CVs, eval=FALSE, include=FALSE}
+print(f'The mean Train Score of SVM + Bagging is {np.array(train_scores).mean():.4f}')
+print(f'The mean Test Score of SVM + Bagging is {np.array(test_scores).mean():.4f}')
+print(f'The mean Time per cvs of SVM + Bagging is {np.array(times).mean():.4f} seconds')
+```
+
+## Works for test set
+```{python test data prediction, eval=FALSE, include=FALSE}
+s = time.time()
+X_train_pca = pca.fit_transform(X_train)
+svm_bag.fit(X_train_pca, y_train)
+print(f'Training model time is {time.time()-s:.4f} seconds')
+```
+
+```{python test scores, eval=FALSE, include=FALSE}
+#Test scores
+s = time.time()
+X_test_pca = pca.transform(X_test)
+predict = svm_bag(X_test_pca)
+```
+
+
+
