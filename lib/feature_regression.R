@@ -34,16 +34,16 @@ feature_regression <- function(input_list = fiducial_pt_list, index){
   ### column bind feature matrix in Step 3 and corresponding features
   
   # if we have labels
-  if ("emotion_idx" %in% colnames(info)) {
+  if (exists("info") ) {
     feature_data <- as.data.frame(cbind(euclidean_feature, info$emotion_idx[index]))
     colnames(feature_data) <- c(paste("feature", 1:(ncol(feature_data) - 1), sep = ""), "emotion_idx")
     feature_data$emotion_idx <- as.factor(feature_data$emotion_idx)
-    
+
     # if there are no labels
   } else {
-    
+
     feature_data <- as.data.frame(euclidean_feature)
-    colnames(feature_data) <- c(paste("feature", 1:ncol(pairwise_data), sep = ""))
+    colnames(feature_data) <- c(paste("feature", 1:ncol(euclidean_feature), sep = ""))
   }
   
   return(feature_df = feature_data)
