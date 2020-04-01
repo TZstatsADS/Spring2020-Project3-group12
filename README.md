@@ -12,7 +12,7 @@ Term: Spring 2020
 	+ Liu, Yuqiao (yl4278)
 	+ Wolansky, Ivan (iaw2110)
 	+ Yan, Xiyao (xy2431)
-	+ Zhu, Huizhe (hz2657) Presentor
+	+ Zhu, Huizhe (hz2657) Presenter
 
 + Project summary: In this project, we created a classification engine for facial emotion recognition. We built Lasso/Ridge, Tree-based models, SVM, Voting classifier, and Bagging models based on 2500 image data. The prediction accuracy on test set improves from 22.8% (Baseline model) to 54.28% (final advanced model). 
 	
