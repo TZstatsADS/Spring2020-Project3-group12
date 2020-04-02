@@ -205,7 +205,10 @@ colnames(dat_test)[6007] = 'label'
 ```{r runcv, eval=F}
 if(run.gbm){
   # Train the Baseline GBM model
-  tm_train_gbm_baseline <- system.time(gbm.baseline <- train_gbm(train.df=dat_train, s=0.001, K=2, n=50))
+  tm_train_gbm_baseline <- system.time(gbm.baseline <- train_gbm(train.df=dat_train, 
+                                                                 s=0.001, 
+                                                                 K=2, 
+                                                                 n=50))
   
   # Save the output
   save(gbm.baseline, file="../output/gbm.baseline")
@@ -230,7 +233,6 @@ accu_baseline_gbm <- mean(dat_test$label == pred_gbm_baseline)
 cat("The accuracy of model: GBM baseline is", mean(dat_test$label == pred_gbm_baseline)*100, "%.\n")
 
 # Confusion Matrix 
-library(caret)
 confusionMatrix(as.factor(dat_test$label), as.factor(pred_gbm_baseline))
 ```
 The accuracy of model: GBM baseline is 22.8%.
@@ -243,7 +245,6 @@ Prediction performance matters, so does the running times for constructing featu
 #cat("Time for constructing training features:", tm_train_gbm_baseline[1], "s \n")
 #cat("Time for constructing testing features:", tm_test_gbm_baseline[1], "s \n")
 cat("Time for training model:", tm_train_gbm_baseline[1], "s \n")
-cat("Time for testing model:", tm_test_gbm_baseline[1], "s \n")
 ```
 
 Time for training model: 196.2 s.
@@ -368,7 +369,9 @@ source("../lib/regression.cv.R")
 
 ```{r, eval=FALSE}
 if(training){
-  tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
+  tm_train_lasso <- system.time(cv_lasso_models <- regression.train(feature_df=all_train_data, 
+                                                                    alpha=alpha, 
+                                                                    K=K))
   save(cv_lasso_models, file="../output/cv_lasso_models.RData")
 }
 ```
@@ -525,7 +528,9 @@ source("../lib/regression.cv.R")
 
 ```{r, eval=FALSE}
 if(training){
-  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=all_train_data, alpha=alpha, K=K))
+  tm_train_ridge <- system.time(cv_ridge_models <- regression.train(feature_df=all_train_data, 
+                                                                    alpha=alpha,
+                                                                    K=K))
   
   save(cv_ridge_models, file="../output/cv_ridge_models.RData")
 }
@@ -593,7 +598,9 @@ MSE<-mean(p != as.factor(testdata[,3004]))
 train_pca<-prcomp(data_train[,-3004])
 sdev<-train_pca$sdev
 sum(sdev[1:500]^2)/sum(sdev^2)
-validation_pca<-scale(data_validation[,-3004], train_pca$center, train_pca$scale) %*% train_pca$rotation
+validation_pca<-scale(data_validation[,-3004], 
+                      train_pca$center, 
+                      train_pca$scale) %*% train_pca$rotation
 svm_list<-list()
 MSE_validation<-c()
 for(i in 1:500){
@@ -662,7 +669,8 @@ def dist(file):
 # Read Train datasets
 s = time.time()
 train_label = pd.read_csv('../data/train_set/label.csv')
-file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+file_path = [os.path.join('../data/train_set/points/',
+                          str(i).zfill(4) + '.mat') for i in range(1, 2501)]
 
 X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
 y_train = train_label['emotion_idx']
@@ -697,7 +705,11 @@ X = X_train
 y = y_train
 for i in range(10):
     s = time.time()
-    X_train, X_validation, y_train, y_validation = train_test_split(X, y, test_size=.2, shuffle=True, stratify=y)
+    X_train, X_validation, y_train, y_validation = train_test_split(X,
+                                                                    y, 
+                                                                    test_size=.2, 
+                                                                    shuffle=True, 
+                                                                    stratify=y)
     X_train_pca = pca.fit_transform(X_train)
     X_validation_pca = pca.transform(X_validation)
 
@@ -756,9 +768,11 @@ def dist(file):
 # Read Train datasets
 s = time.time()
 train_label = pd.read_csv('../data/train_set/label.csv')
-file_path = [os.path.join('../data/train_set/points/', str(i).zfill(4) + '.mat') for i in range(1, 2501)]
+file_path = [os.path.join('../data/train_set/points/', 
+                      str(i).zfill(4) + '.mat') for i in range(1, 2501)]
 
-X_train = np.array(list(map(dist, (loadmat(f) for f in file_path))))
+X_train = np.array(list(map(dist, 
+                    (loadmat(f) for f in file_path))))
 y_train = train_label['emotion_idx']
 print(f'Training features extraction time: {time.time()-s:.4f} seconds')
 groups = y_train
